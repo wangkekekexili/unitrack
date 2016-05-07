@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/xml"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
-	"strconv"
-	"io/ioutil"
 )
 
 const (
@@ -35,6 +37,7 @@ func main() {
 }
 
 func getTrackingSummary(trackingNumber string) (string, error) {
+	// Get from web.
 	getRequest := "http://production.shippingapis.com/ShippingAPI.dll?API=TrackV2&" +
 		"XML=%3CTrackRequest%20USERID%3D%22315INDIV8018%22%3E%3CTrackID%20ID%3D%22" +
 		trackingNumber +
@@ -47,6 +50,24 @@ func getTrackingSummary(trackingNumber string) (string, error) {
 	body, err := ioutil.ReadAll(getResponse.Body)
 	if err != nil {
 		return "", err
+	}
+
+	// Parse xml.
+	xmlString := string(body)
+	reader := strings.NewReader(xmlString)
+	decoder := xml.NewDecoder(reader)
+	summaryStarted := false
+	for token, err := decoder.Token(); err == nil; token, err = decoder.Token() {
+		switch t := token.(type) {
+		case xml.StartElement:
+			if t.Name.Local == "TrackSummary" {
+				summaryStarted = true
+			}
+		case xml.CharData:
+			if summaryStarted {
+				return string([]byte(t)), nil
+			}
+		}
 	}
 
 	return string(body), nil
